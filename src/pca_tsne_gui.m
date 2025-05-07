@@ -61,7 +61,6 @@ function pca_tsne_gui
             return;
         end
 
-        % Pobierz wybrane zmienne
         idx_data = get(popup_data, 'Value');
         fields = get(popup_data, 'String');
         data.X = data.loaded.(fields{idx_data});
@@ -76,28 +75,23 @@ function pca_tsne_gui
 
         labels_for_color = grp2idx(data.labels);
 
-        % Pobierz parametry
+        % Parametry
         pca_variance = str2double(get(pca_variance_edit, 'String')) / 100;
         tsne_perplexity = str2double(get(tsne_perplexity_edit, 'String'));
         tsne_lr = str2double(get(tsne_lr_edit, 'String'));
         selected_pca = get(cb_pca, 'Value');
         selected_tsne = get(cb_tsne, 'Value');
 
-        dim_option_raw = get(dimension_popup, 'Value'); % 1 dla 2D, 2 dla 3D
-        if dim_option_raw == 1
-            tsne_dims = 2;
-        else
-            tsne_dims = 3;
-        end
+        dim_option_raw = get(dimension_popup, 'Value');
+        tsne_dims = 2 + (dim_option_raw == 2);
 
-        % Sprawdzenie poprawności parametrów t-SNE
+        % Sprawdzenie poprawności perplexity
         n_samples = size(data.X, 1);
         if tsne_perplexity > (n_samples - 1) / 3
             warndlg(sprintf('Perplexity za duże! Dla %d próbek, max to około %.1f.', n_samples, (n_samples - 1) / 3), 'Błąd Perplexity');
             return;
         end
 
-        % Nowe okno wynikowe
         figure;
         num_plots = selected_pca + selected_tsne;
         idx = 1;
@@ -116,21 +110,33 @@ function pca_tsne_gui
     function perform_pca(labels_for_color, dim_option, variance_threshold)
         [coeff, score, latent, ~, explained] = pca(data.X);
         cumulative_explained = cumsum(explained)/100;
-
-        % Znalezienie minimalnej liczby komponentów
         num_components = find(cumulative_explained >= variance_threshold, 1, 'first');
         disp(['PCA - liczba komponentów dla progu ' num2str(variance_threshold*100) '%: ' num2str(num_components)]);
 
-        if dim_option == 1 % 2D
-            scatter(score(:,1), score(:,2), 20, labels_for_color, 'filled');
+        classes = unique(data.labels);
+        cmap = lines(length(classes));
+        hold on;
+
+        for i = 1:length(classes)
+            idx = labels_for_color == i;
+            if dim_option == 1
+                scatter(score(idx,1), score(idx,2), 20, cmap(i,:), 'filled', 'DisplayName', string(classes(i)));
+            else
+                scatter3(score(idx,1), score(idx,2), score(idx,3), 20, cmap(i,:), 'filled', 'DisplayName', string(classes(i)));
+            end
+        end
+
+        if dim_option == 1
             title(['PCA 2D (Var ', num2str(variance_threshold*100), '%)']);
             xlabel('PC1'); ylabel('PC2');
-        else % 3D
-            scatter3(score(:,1), score(:,2), score(:,3), 20, labels_for_color, 'filled');
+        else
             title(['PCA 3D (Var ', num2str(variance_threshold*100), '%)']);
             xlabel('PC1'); ylabel('PC2'); zlabel('PC3');
             view(3);
         end
+
+        legend('show');
+        hold off;
     end
 
     function perform_tsne(labels_for_color, num_dimensions, perplexity, learning_rate)
@@ -140,16 +146,29 @@ function pca_tsne_gui
             'Perplexity', perplexity, ...
             'LearnRate', learning_rate);
 
+        classes = unique(data.labels);
+        cmap = lines(length(classes));
+        hold on;
+
+        for i = 1:length(classes)
+            idx = labels_for_color == i;
+            if num_dimensions == 2
+                scatter(reduced(idx,1), reduced(idx,2), 20, cmap(i,:), 'filled', 'DisplayName', string(classes(i)));
+            else
+                scatter3(reduced(idx,1), reduced(idx,2), reduced(idx,3), 20, cmap(i,:), 'filled', 'DisplayName', string(classes(i)));
+            end
+        end
+
         if num_dimensions == 2
-            scatter(reduced(:,1), reduced(:,2), 20, labels_for_color, 'filled');
             title('t-SNE 2D');
             xlabel('Dim 1'); ylabel('Dim 2');
-        elseif num_dimensions == 3
-            scatter3(reduced(:,1), reduced(:,2), reduced(:,3), 20, labels_for_color, 'filled');
+        else
             title('t-SNE 3D');
             xlabel('Dim 1'); ylabel('Dim 2'); zlabel('Dim 3');
             view(3);
         end
-    end
 
+        legend('show');
+        hold off;
+    end
 end
